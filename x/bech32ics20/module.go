@@ -2,6 +2,7 @@ package bech32ics20
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -35,6 +36,7 @@ type AppModule struct {
 // RegisterServices registers module services.
 // BE WARNED: THIS NEEDS TO BE UPDATED EVERY BANK UPDATE
 func (am AppModule) RegisterServices(cfg module.Configurator) {
+	fmt.Println("Registering bech32ics20 msg server, should not be registering bank msg server!")
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 

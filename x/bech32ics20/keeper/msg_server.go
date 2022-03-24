@@ -26,32 +26,38 @@ var _ banktypes.MsgServer = msgServer{}
 
 func (k msgServer) Send(goCtx context.Context, msg *banktypes.MsgSend) (*banktypes.MsgSendResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx.Logger().Error("Enter bech32ics20 msg server Send method", "msg", msg)
 
 	if err := k.IsSendEnabledCoins(ctx, msg.Amount...); err != nil {
 		return nil, err
 	}
 
 	from, err := sdk.AccAddressFromBech32(msg.FromAddress)
+	ctx.Logger().Error("Got from address", "from", from)
 	if err != nil {
 		return nil, err
 	}
 
 	prefix, _, err := bech32.DecodeAndConvert(msg.ToAddress)
+	ctx.Logger().Error("got to address prefix", "prefix", prefix)
 	if err != nil {
 		return nil, err
 	}
 
 	nativePrefix, err := k.hrpToChannelMapper.GetNativeHrp(ctx)
+	ctx.Logger().Error("Got native prefix", "nativePrefix", nativePrefix)
 	if err != nil {
 		return nil, err
 	}
 
 	if prefix == nativePrefix {
+		ctx.Logger().Error("Send to local address")
 		bankMsgServer := bankkeeper.NewMsgServerImpl(k.Keeper.Keeper)
 		return bankMsgServer.Send(goCtx, msg)
 	}
 
 	ibcRecord, err := k.hrpToChannelMapper.GetHrpIbcRecord(ctx, prefix)
+	ctx.Logger().Error("Got ibc record for to address", "ibcRecord", ibcRecord)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +70,7 @@ func (k msgServer) Send(goCtx context.Context, msg *banktypes.MsgSend) (*banktyp
 	}
 
 	portId := k.tk.GetPort(ctx)
+	ctx.Logger().Error("got port", "portId", portId)
 	_, clientState, err := k.channelKeeper.GetChannelClientState(ctx, portId, ibcRecord.SourceChannel)
 	if err != nil {
 		return nil, err
@@ -71,6 +78,7 @@ func (k msgServer) Send(goCtx context.Context, msg *banktypes.MsgSend) (*banktyp
 
 	latestHeight := clientState.GetLatestHeight()
 	timeoutHeight := clienttypes.NewHeight(latestHeight.GetRevisionNumber(), latestHeight.GetRevisionHeight()+ibcRecord.IcsToHeightOffset)
+	ctx.Logger().Error("calculated timeoutHeight", "timeoutHeight", timeoutHeight)
 
 	ibcTransferMsg := ibctransfertypes.NewMsgTransfer(
 		portId,
@@ -80,8 +88,10 @@ func (k msgServer) Send(goCtx context.Context, msg *banktypes.MsgSend) (*banktyp
 		msg.ToAddress,
 		timeoutHeight, 0, // Use no timeouts for now.  Can add this in future.
 	)
+	ctx.Logger().Error("created transfer message", "ibcTransferMsg", ibcTransferMsg)
 
 	_, err = k.ics20TransferMsgServer.Transfer(sdk.WrapSDKContext(ctx), ibcTransferMsg)
+	ctx.Logger().Error("called Transfer on ics20 msg server", "err", err)
 
 	return &banktypes.MsgSendResponse{}, err
 }
